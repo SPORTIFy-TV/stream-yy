@@ -1,156 +1,188 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Premium JioTV Player</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.ui.min.js" crossorigin="anonymous"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/controls.min.css" crossorigin="anonymous">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Live Sports Player</title>
+  <script src="https://cdn.jwplayer.com/libraries/IDzF9Zmk.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { background: #000; height: 100vh; width: 100vw; overflow: hidden; font-family: system-ui, sans-serif; }
-    .shaka-video-container { position: absolute; inset: 0; width: 100%; height: 100%; }
-    video { width: 100%; height: 100%; background: #000; object-fit: contain; }
-    .shaka-spinner-container, .shaka-spinner, .shaka-spinner-svg { display: none !important; visibility: hidden !important; opacity: 0 !important; }
-    .channel-info { position: absolute; top: 0; left: 0; right: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%); padding: 1rem; display: flex; align-items: center; z-index: 10; transition: opacity 0.3s ease; }
-    .channel-info.hidden { opacity: 0; pointer-events: none; }
-    .channel-logo { width: 40px; height: 40px; margin-right: 15px; border-radius: 8px; background: #222; }
-    .channel-name { font-size: 1.2rem; font-weight: 500; color: white; }
-    .loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 1.2rem; text-align: center; z-index: 5; }
-    .error { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #ff4444; font-size: 1.2rem; text-align: center; background: rgba(0, 0, 0, 0.7); padding: 2rem; border-radius: 8px; max-width: 80%; }
-    .error.hidden { display: none; }
+    /* বেস লেআউট */
+    html, body { margin: 0; height: 100%; background: black; overflow: hidden; }
+    
+    #player-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+    #player { width: 100%; height: 100%; }
+
+    /* লোডিং ডিজাইন */
+    #loading-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:999999; color:white; font-family:Arial; text-align:center; padding: 20px;}
+    .spinner { width:50px; height:50px; border:5px solid rgba(255,255,255,0.1); border-top-color:#e94560; border-radius:50%; animation:spin 1s linear infinite; margin-bottom:15px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* কোয়ালিটি মেনু ডিজাইন */
+    .jw-quality-selector { 
+      position:absolute; bottom:60px; right:20px; background:rgba(30, 30, 30, 0.95); 
+      border-radius:5px; z-index:99999999; display:none; font-family:Arial, sans-serif; 
+      min-width:160px; box-shadow:0 5px 20px rgba(0,0,0,0.9); overflow: hidden;
+    }
+    .jw-quality-selector.show { display:block; }
+    .jw-quality-item { 
+      padding:12px 20px 12px 45px; color:#d1d1d1; cursor:pointer; font-size:14px; 
+      text-align:right; border-bottom:1px solid #333; position:relative; 
+    }
+    .jw-quality-item:last-child { border-bottom:none; }
+    .jw-quality-item:hover { background:#444; color:white; }
+    .jw-quality-item.active { background:#f04360; color:white; font-weight:bold; }
+    .jw-quality-item.active::before { content:'✓'; position:absolute; left:15px; color:white; font-size: 16px; }
+    
+    #quality-loading { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.8); color:white; padding:10px 20px; border-radius:30px; font-size:14px; z-index:99999; display:none; font-family:Arial; border:1px solid rgba(255,255,255,0.2); }
   </style>
 </head>
 <body>
-  <div class="channel-info hidden" id="channelInfo">
-    <img class="channel-logo" id="channelLogo" src="" alt="Logo" onerror="this.style.display='none'">
-    <div class="channel-name" id="channelName">Loading Channel...</div>
+
+  <div id="loading-overlay"><div class="spinner"></div><div id="loading-text">Loading Stream...</div></div>
+  <div id="quality-loading">Switching quality...</div>
+
+  <div id="player-container">
+    <div id="player"></div>
   </div>
   
-  <div class="shaka-video-container" data-shaka-player>
-    <video autoplay playsinline preload="metadata"></video>
-  </div>
-  
-  <div class="loading" id="loadingMessage">Loading player and channel data...</div>
-  <div class="error hidden" id="errorMessage">
-    <h2>Error Loading Channel</h2>
-    <p id="errorText"></p>
-  </div>
+  <div id="quality-selector" class="jw-quality-selector"></div>
 
   <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      function getChannelIdFromUrl() {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('id');
-      }
-      
-      function showError(message) {
-        document.getElementById('errorText').textContent = message;
-        document.getElementById('errorMessage').classList.remove('hidden');
-        document.getElementById('loadingMessage').style.display = 'none';
-      }
-      
-      function hideChannelInfo() {
-        setTimeout(() => { document.getElementById('channelInfo').classList.add('hidden'); }, 5000);
-      }
-      
-      function findChannelInM3U(content, targetId) {
-        const lines = content.split('\n');
-        let currentChannel = {};
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (line.startsWith('#EXTINF:')) {
-            const infoMatch = line.match(/#EXTINF:.*?tvg-id="(\d+)".*?tvg-logo="([^"]+)".*?,(.*)$/);
-            if (infoMatch) {
-              currentChannel = { id: infoMatch[1], logo: infoMatch[2], name: infoMatch[3].trim(), licenseKey: '', cookie: '', streamUrl: '' };
-            }
-          } else if (line.startsWith('#KODIPROP:inputstream.adaptive.license_key=')) {
-            const keyMatch = line.match(/license_key=([^:\s]+):([^\s]+)/);
-            if (keyMatch) currentChannel.licenseKey = `${keyMatch[1]}:${keyMatch[2]}`;
-          } else if (line.startsWith('#EXTHTTP:')) {
-            try {
-              const jsonMatch = line.match(/#EXTHTTP:\s*(\{.*\})/);
-              if (jsonMatch) currentChannel.cookie = JSON.parse(jsonMatch[1]).cookie;
-            } catch (e) {}
-          } else if (line.startsWith('http')) {
-            currentChannel.streamUrl = line;
-            if (currentChannel.id === targetId) return currentChannel;
-            currentChannel = {};
-          }
-        }
-        return null;
-      }
-      
-      async function fetchChannel() {
-        const channelId = getChannelIdFromUrl();
-        if (!channelId) { showError('No channel ID specified. Add ?id=CHANNEL_ID to the URL'); return null; }
-        try {
-          document.getElementById('loadingMessage').textContent = `Loading channel ${channelId}...`;
-          const response = await fetch('https://raw.githubusercontent.com/alpha4528/m3u/refs/heads/main/jtv.m3u');
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const content = await response.text();
-          const channel = findChannelInM3U(content, channelId);
-          if (!channel) throw new Error(`Channel ID ${channelId} not found`);
-          return channel;
-        } catch (error) {
-          showError(error.message);
-          return null;
+    // Proxy URL সরিয়ে সরাসরি লিঙ্ক ব্যবহারের ব্যবস্থা করা হয়েছে
+    const urlParams = new URLSearchParams(window.location.search);
+    const streamUrl = urlParams.get('play');
+
+    let player = null;
+    let currentQuality = '';
+    let qualityUrls = [];
+
+    function showLoading(s, t="Loading...") {
+      const overlay = document.getElementById('loading-overlay');
+      const spinner = overlay.querySelector('.spinner');
+      overlay.style.display = s ? 'flex' : 'none';
+      if(s) {
+        document.getElementById('loading-text').innerText = t;
+        if(t.includes("Error") || t.includes("provide")) {
+          spinner.style.display = 'none';
+        } else {
+          spinner.style.display = 'block';
         }
       }
+    }
 
-      async function initPlayerWithChannel(channel) {
-        shaka.polyfill.installAll();
-        if (!shaka.Player.isBrowserSupported()) { showError('Browser not supported'); return; }
+    function generateStreamsFromUrl(url) {
+      const qMap = {'1080p':6, '720p':5, '540p':4, '480p':3, '360p':2, '240p':1};
+      const qualities = ['1080p', '720p', '540p', '480p', '360p', '240p'];
+      let streams = [];
+      
+      const match = url.match(/(1080p|720p|540p|480p|360p|240p|master)\.m3u8/i);
+      if(match) {
+        let replaceTarget = match[1] + '.m3u8';
+        qualities.forEach(q => {
+          let newUrl = url.replace(replaceTarget, q + '.m3u8');
+          streams.push({url: newUrl, quality: q, order: qMap[q]});
+        });
+      } else {
+        streams.push({url: url, quality: 'Auto', order: 1});
+      }
+      return streams.sort((a,b) => b.order - a.order);
+    }
 
-        const video = document.querySelector('video');
-        const player = new shaka.Player();
-        await player.attach(video);
+    function buildMenu() {
+      const sel = document.getElementById('quality-selector');
+      sel.innerHTML = '';
+      qualityUrls.forEach(s => {
+        const div = document.createElement('div');
+        div.className = 'jw-quality-item';
+        if(s.quality === currentQuality) div.classList.add('active');
+        div.innerText = s.quality;
+        div.onclick = (e) => { 
+          e.stopPropagation(); 
+          changeQuality(s.url, s.quality); 
+          sel.classList.remove('show'); 
+        };
+        sel.appendChild(div);
+      });
+    }
 
-        const container = document.querySelector('.shaka-video-container');
-        const ui = new shaka.ui.Overlay(player, container, video);
+    function changeQuality(url, label) {
+      currentQuality = label;
+      buildMenu();
+      document.getElementById('quality-loading').style.display = 'block';
+      const pos = player.getPosition();
+      
+      // সরাসরি URL লোড করা হচ্ছে
+      player.load([{ file: url, label: label, type: 'hls' }]);
+      player.once('play', () => {
+        document.getElementById('quality-loading').style.display = 'none';
+        if(pos > 0) player.seek(pos);
+      });
+    }
 
-        const [keyId, keyValue] = channel.licenseKey.split(':');
-        player.configure({
-          drm: { clearKeys: { [keyId]: keyValue } },
-          streaming: { lowLatencyMode: true, bufferingGoal: 15 }
+    function initPlayer() {
+      if(!streamUrl) {
+        return showLoading(true, "No stream URL provided.\nUse ?play=YOUR_M3U8_LINK");
+      }
+
+      showLoading(true, "Loading Player...");
+
+      try {
+        qualityUrls = generateStreamsFromUrl(streamUrl);
+        const def = qualityUrls[0];
+        currentQuality = def.quality;
+        buildMenu();
+
+        player = jwplayer('player').setup({
+          file: def.url, // সরাসরি URL ব্যবহার করা হয়েছে
+          type: 'hls', 
+          autostart: true,
+          mute: false,
+          width: '100%',
+          height: '100%',
+          stretching: 'uniform',
+          controls: true,
+          pip: true, // PiP সাপোর্ট অ্যাড করা হয়েছে
+          primary: 'html5',
+          hlshtml: true
         });
 
-        player.getNetworkingEngine().registerRequestFilter((type, request) => {
-          request.headers['Referer'] = 'https://www.jiotv.com/';
-          request.headers['User-Agent'] = "plaYtv/7.1.5 (Linux;Android 13) ExoPlayerLib/2.11.6";
-          if (channel.cookie) {
-            request.headers['Cookie'] = channel.cookie;
-            if ((type === shaka.net.NetworkingEngine.RequestType.MANIFEST || type === shaka.net.NetworkingEngine.RequestType.SEGMENT) && request.uris[0] && !request.uris[0].includes('__hdnea__=')) {
-              request.uris[0] += (request.uris[0].includes('?') ? '&' : '?') + channel.cookie;
-            }
+        player.on('ready', () => {
+          showLoading(false);
+          const playerDiv = document.getElementById('player');
+          const qualityMenu = document.getElementById('quality-selector');
+          if (playerDiv && qualityMenu) {
+            playerDiv.appendChild(qualityMenu);
           }
-        });
-
-        try {
-          let updatedUrl = channel.streamUrl;
+          
+          const gearSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xOS40IDEzYy4xLS42LjEtMS4zIDAtMS45bDIuMS0xLjZjLjItLjIuMy0uNS4xLS43bC0yLTMuNWMtLjItLjMtLjUtLjQtLjgtLjNsLTIuNSAxYy0uNS0uNC0xLjEtLjctMS43LTFsLS40LTIuNmMwLS4zLS4zLS41LS42LS41aC00Yy0uMyAwLS42LjItLjYuNWwtLjQgMi42Yy0uNi4zLTEuMi42LTEuNyAxbC0yLjUtMWMtLjMtLjEtLjYgMC0uOC4zbC0yIDMuNWMtLjEuMi0uMS41LjEuN2wyLjEgMS42Yy0uMS42LS4xIDEuMyAwIDEuOWwtMi4xIDEuNmMtLjIuMi0uMy41LS4xLjdsMiAzLjVjLjIuMy41LjQuOC4zbDIuNS0xYzEuNS40IDEuMS43IDEuNyAxbC40IDIuNmMwIC4zLjMuNS42LjVoNGMuMyAwIC42LS4yLjYtLjVsLjQtMi42Yy42LS4zIDEuMi0uNiAxLjctMWwyLjUgMWMuMy4xLjYgMCAuOC0uM2wyLTMuNWMuMS0uMi4xLS41LS4xLS43bC0yLjEtMS42em0tNy40IDIuNWMtMS45IDAtMy41LTEuNi0zLjUtMy41czEuNi0zLjUgMy41LTMuNSAzLjUgMS42IDMuNSAzLjUtMS42IDMuNS0zLjUgMy41eiIvPjwvc3ZnPg==";
+          
           try {
-            const urlObj = new URL(updatedUrl);
-            urlObj.hostname = "jiotvbpkmob.cdn.jio.com";
-            updatedUrl = urlObj.toString();
-          } catch (err) {}
+            player.addButton(
+              gearSvg,
+              "Quality",
+              () => { document.getElementById('quality-selector').classList.toggle('show'); },
+              "quality-settings-btn"
+            );
+          } catch(e) { console.log("Button API failed"); }
+        });
 
-          await player.load(updatedUrl);
-          video.muted = false;
-          video.play().catch(() => { video.muted = true; video.play(); });
-        } catch (error) {
-          console.error('Load error:', error);
-        }
+        player.on('error', () => {
+          showLoading(true, "Video Error! Check your link.");
+        });
 
-        document.getElementById('channelLogo').src = channel.logo;
-        document.getElementById('channelName').textContent = channel.name;
-        document.getElementById('channelInfo').classList.remove('hidden');
-        hideChannelInfo();
-        document.getElementById('loadingMessage').style.display = 'none';
+      } catch(err) {
+        showLoading(true, "Script Error!");
       }
+    }
 
-      const channel = await fetchChannel();
-      if (channel) await initPlayerWithChannel(channel);
+    document.addEventListener('click', (e) => {
+      const sel = document.getElementById('quality-selector');
+      if(sel && sel.classList.contains('show') && !e.target.closest('.jw-button-color') && !sel.contains(e.target)) {
+        sel.classList.remove('show');
+      }
     });
+
+    initPlayer();
   </script>
 </body>
 </html>

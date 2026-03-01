@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Live Sports Player - Pro</title>
+  <title>Live Sports Player - Fixed</title>
   <script src="https://cdn.jwplayer.com/libraries/IDzF9Zmk.js"></script>
   <style>
+    /* বেস লেআউট */
     html, body { margin: 0; height: 100%; background: black; overflow: hidden; }
+    
     #player-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
     #player { width: 100%; height: 100%; }
 
@@ -17,23 +19,24 @@
     
     /* কোয়ালিটি মেনু ডিজাইন */
     .jw-quality-selector { 
-      position:absolute; bottom:70px; right:20px; background:rgba(20, 20, 20, 0.95); 
-      border-radius:8px; z-index:99999999; display:none; font-family:Arial, sans-serif; 
-      min-width:140px; box-shadow:0 10px 30px rgba(0,0,0,0.8); border: 1px solid #444;
+      position:absolute; bottom:60px; right:20px; background:rgba(30, 30, 30, 0.95); 
+      border-radius:5px; z-index:99999999; display:none; font-family:Arial, sans-serif; 
+      min-width:160px; box-shadow:0 5px 20px rgba(0,0,0,0.9); overflow: hidden;
     }
     .jw-quality-selector.show { display:block; }
     .jw-quality-item { 
-      padding:12px 20px; color:#ccc; cursor:pointer; font-size:14px; 
-      text-align:center; border-bottom:1px solid #333;
+      padding:12px 20px 12px 45px; color:#d1d1d1; cursor:pointer; font-size:14px; 
+      text-align:right; border-bottom:1px solid #333; position:relative; 
     }
     .jw-quality-item:last-child { border-bottom:none; }
-    .jw-quality-item:hover { background:#333; color:white; }
-    .jw-quality-item.active { background:#e94560; color:white; font-weight:bold; }
+    .jw-quality-item:hover { background:#444; color:white; }
+    .jw-quality-item.active { background:#f04360; color:white; font-weight:bold; }
+    .jw-quality-item.active::before { content:'✓'; position:absolute; left:15px; color:white; font-size: 16px; }
     
-    /* লুকানো ডিফল্ট কোয়ালিটি বাটন */
-    .jw-settings-content [aria-label="Quality"], .jw-icon-settings { display: none !important; }
+    #quality-loading { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.8); color:white; padding:10px 20px; border-radius:30px; font-size:14px; z-index:99999; display:none; font-family:Arial; border:1px solid rgba(255,255,255,0.2); }
 
-    #quality-loading { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.8); color:white; padding:10px 20px; border-radius:30px; font-size:14px; z-index:99999; display:none; font-family:Arial; }
+    /* ডাবল কোয়ালিটি বাটন রিমুভ করার জন্য ডিফল্ট সেটিংস বাটন হাইড */
+    .jw-icon-settings, .jw-settings-content [aria-label="Quality"] { display: none !important; }
   </style>
 </head>
 <body>
@@ -48,6 +51,7 @@
   <div id="quality-selector" class="jw-quality-selector"></div>
 
   <script>
+    // প্রক্সি সিস্টেম সরিয়ে সরাসরি লিঙ্ক ব্যবহারের ব্যবস্থা
     const urlParams = new URLSearchParams(window.location.search);
     const streamUrl = urlParams.get('play');
 
@@ -57,23 +61,34 @@
 
     function showLoading(s, t="Loading...") {
       const overlay = document.getElementById('loading-overlay');
+      const spinner = overlay.querySelector('.spinner');
       overlay.style.display = s ? 'flex' : 'none';
-      if(s) document.getElementById('loading-text').innerText = t;
+      if(s) {
+        document.getElementById('loading-text').innerText = t;
+        if(t.includes("Error") || t.includes("provide")) {
+          spinner.style.display = 'none';
+        } else {
+          spinner.style.display = 'block';
+        }
+      }
     }
 
     function generateStreamsFromUrl(url) {
+      const qMap = {'1080p':6, '720p':5, '540p':4, '480p':3, '360p':2, '240p':1};
       const qualities = ['1080p', '720p', '540p', '480p', '360p', '240p'];
       let streams = [];
+      
       const match = url.match(/(1080p|720p|540p|480p|360p|240p|master)\.m3u8/i);
       if(match) {
         let replaceTarget = match[1] + '.m3u8';
         qualities.forEach(q => {
-          streams.push({url: url.replace(replaceTarget, q + '.m3u8'), quality: q});
+          let newUrl = url.replace(replaceTarget, q + '.m3u8');
+          streams.push({url: newUrl, quality: q, order: qMap[q]});
         });
       } else {
-        streams.push({url: url, quality: 'Auto'});
+        streams.push({url: url, quality: 'Auto', order: 1});
       }
-      return streams;
+      return streams.sort((a,b) => b.order - a.order);
     }
 
     function buildMenu() {
@@ -81,12 +96,13 @@
       sel.innerHTML = '';
       qualityUrls.forEach(s => {
         const div = document.createElement('div');
-        div.className = 'jw-quality-item' + (s.quality === currentQuality ? ' active' : '');
+        div.className = 'jw-quality-item';
+        if(s.quality === currentQuality) div.classList.add('active');
         div.innerText = s.quality;
         div.onclick = (e) => { 
-            e.stopPropagation(); 
-            changeQuality(s.url, s.quality); 
-            sel.classList.remove('show'); 
+          e.stopPropagation(); 
+          changeQuality(s.url, s.quality); 
+          sel.classList.remove('show'); 
         };
         sel.appendChild(div);
       });
@@ -97,7 +113,8 @@
       buildMenu();
       document.getElementById('quality-loading').style.display = 'block';
       const pos = player.getPosition();
-      player.load([{ file: url, type: 'hls', label: label }]);
+      
+      player.load([{ file: url, label: label, type: 'hls' }]);
       player.once('play', () => {
         document.getElementById('quality-loading').style.display = 'none';
         if(pos > 0) player.seek(pos);
@@ -105,60 +122,81 @@
     }
 
     function initPlayer() {
-      if(!streamUrl) return showLoading(true, "No URL provided (?play=URL)");
+      if(!streamUrl) {
+        return showLoading(true, "No stream URL provided.\nUse ?play=YOUR_M3U8_LINK");
+      }
 
-      qualityUrls = generateStreamsFromUrl(streamUrl);
-      const def = qualityUrls[0];
-      currentQuality = def.quality;
-      buildMenu();
+      showLoading(true, "Loading Player...");
 
-      player = jwplayer('player').setup({
-        file: def.url,
-        type: 'hls',
-        autostart: true,
-        width: '100%',
-        height: '100%',
-        controls: true,
-        sharing: false
-      });
+      try {
+        qualityUrls = generateStreamsFromUrl(streamUrl);
+        const def = qualityUrls[0];
+        currentQuality = def.quality;
+        buildMenu();
 
-      player.on('ready', () => {
-        showLoading(false);
-        const playerDiv = document.querySelector('.jw-controls');
-        if (playerDiv) playerDiv.appendChild(document.getElementById('quality-selector'));
+        player = jwplayer('player').setup({
+          file: def.url,
+          type: 'hls', 
+          autostart: true,
+          mute: false,
+          width: '100%',
+          height: '100%',
+          stretching: 'uniform',
+          controls: true,
+          primary: 'html5',
+          hlshtml: true
+        });
 
-        // ১০ সেকেন্ড ব্যাক বাটন
-        const backSvg = '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12.5 3C17.15 3 21.08 6.03 22.47 10.22L20.1 11C19.05 7.69 16.03 5.25 12.5 5.25C9.07 5.25 6.13 7.5 5.05 10.61L7 12H2V7L3.92 8.59C5.39 5.24 8.68 3 12.5 3M11.5 10H12.5V17H11.5V10M8.2 10.1C8.75 10.1 9.2 10.55 9.2 11.1V15.9C9.2 16.45 8.75 16.9 8.2 16.9H5.8C5.25 16.9 4.8 16.45 4.8 15.9V11.1C4.8 10.55 5.25 10.1 5.8 10.1H8.2M8 15.7V11.3H6V15.7H8Z"/></svg>';
-        player.addButton(backSvg, "Back 10s", () => {
-          let target = player.getPosition() - 10;
-          player.seek(target < 0 ? 0 : target);
-        }, "back-btn");
-
-        // কোয়ালিটি বাটন (ডান দিকে)
-        const gearSvg = '<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.97 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.97 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.95C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>';
-        player.addButton(gearSvg, "Quality", () => {
-          document.getElementById('quality-selector').classList.toggle('show');
-        }, "quality-btn");
-      });
-
-      // লাইভ সিঙ্ক লজিক
-      player.on('time', (data) => {
-        const liveBtn = document.querySelector('.jw-display-icon-live');
-        if(liveBtn) {
-          // যদি লাইভ থেকে ৫ সেকেন্ডের বেশি পিছনে থাকে
-          if (data.duration - data.position > 5) {
-            liveBtn.style.color = "#ccc"; // Not live color
-            liveBtn.onclick = () => player.seek(data.duration);
-          } else {
-            liveBtn.style.color = "#ff0000"; // Live color
+        player.on('ready', () => {
+          showLoading(false);
+          const playerDiv = document.getElementById('player');
+          const qualityMenu = document.getElementById('quality-selector');
+          if (playerDiv && qualityMenu) {
+            playerDiv.appendChild(qualityMenu);
           }
-        }
-      });
+          
+          // ১০ সেকেন্ড ব্যাক বাটন আইকন
+          const backSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMi41IDNDMTcuMTUgMyAyMS4wOCA2LjAzIDIyLjQ3IDEwLjIyTDIwLjEgMTFDMTkuMDUgNy42OSAxNi4wMyA1LjI1IDEyLjUgNS4yNUM5LjA3IDUuMjUgNi4xMyA3LjUgNS4wNSAxMC42MUw3IDEySDJWN0wzLjkyIDguNTlDNS4zOSA1LjI0IDguNjggMyAxMi41IDNNMTEuNSAxMEgxMi41VjE3SDExLjVWMTBNOC4yIDEwLjFDOC43NSAxMC4xIDkuMiAxMC41NSA5LjIgMTEuMVYxNS45QzkuMiAxNi40NSA4Ljc1IDE2LjkgOC4yIDE2LjlINS44QzUuMjUgMTYuOSA0LjggMTYuNDUgNC44IDE1LjlWMTEuMUM0LjggMTAuNTUgNS4yNSAxMC4xIDUuOCAxMC4xSDguMk04IDE1LjdWMTEuM0g2VjE1LjdIOFoiLz48L3N2Zz4=";
+          
+          player.addButton(backSvg, "Back 10s", () => {
+              let target = player.getPosition() - 10;
+              player.seek(target < 0 ? 0 : target);
+          }, "back-btn");
+
+          const gearSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xOS40IDEzYy4xLS42LjEtMS4zIDAtMS45bDIuMS0xLjZjLjItLjIuMy0uNS4xLS43bC0yLTMuNWMtLjItLjMtLjUtLjQtLjgtLjNsLTIuNSAxYy0uNS0uNC0xLjEtLjctMS43LTFsLS40LTIuNmMwLS4zLS4zLS41LS42LS41aC00Yy0uMyAwLS42LjItLjYuNWwtLjQgMi42Yy0uNi4zLTEuMi42LTEuNyAxbC0yLjUtMWMtLjMtLjEtLjYgMC0uOC4zbC0yIDMuNWMtLjEuMi0uMS41LjEuN2wyLjEgMS42Yy0uMS42LS4xIDEuMyAwIDEuOWwtMi4xIDEuNmMtLjIuMi0uMy41LS4xLjdsMiAzLjVjLjIuMy41LjQuOC4zbDIuNS0xYzEuNS40IDEuMS43IDEuNyAxbC40IDIuNmMwIC4zLjMuNS42LjVoNGMuMyAwIC42LS4yLjYtLjVsLjQtMi42Yy42LS4zIDEuMi0uNiAxLjctMWwyLjUgMWMuMy4xLjYgMCAuOC0uM2wyLTMuNWMuMS0uMi4xLS41LS4xLS43bC0yLjEtMS42em0tNy40IDIuNWMtMS45IDAtMy41LTEuNi0zLjUtMy41czEuNi0zLjUgMy41LTMuNSAzLjUgMS42IDMuNSAzLjUtMS42IDMuNS0zLjUgMy41eiIvPjwvc3ZnPg==";
+          
+          player.addButton(gearSvg, "Quality", () => { 
+            document.getElementById('quality-selector').classList.toggle('show'); 
+          }, "quality-settings-btn");
+        });
+
+        // লাইভ সিঙ্ক লজিক
+        player.on('time', (data) => {
+          const liveBtn = document.querySelector('.jw-display-icon-live');
+          if (liveBtn) {
+            if (data.duration - data.position > 10) {
+              liveBtn.style.color = "#ccc"; // Not Live Color
+              liveBtn.style.cursor = "pointer";
+              liveBtn.onclick = () => player.seek(player.getDuration());
+            } else {
+              liveBtn.style.color = "#ff0000"; // Live Color
+              liveBtn.onclick = null;
+            }
+          }
+        });
+
+        player.on('error', () => {
+          showLoading(true, "Video Error! Check your link.");
+        });
+
+      } catch(err) {
+        showLoading(true, "Script Error!");
+      }
     }
 
     document.addEventListener('click', (e) => {
       const sel = document.getElementById('quality-selector');
-      if(sel && !e.target.closest('#quality-selector') && !e.target.closest('.jw-icon-quality-btn')) {
+      if(sel && sel.classList.contains('show') && !e.target.closest('.jw-button-color') && !sel.contains(e.target)) {
         sel.classList.remove('show');
       }
     });

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Live Sports Player - Updated</title>
+  <title>Live Sports Player - Auto URL</title>
   <script src="https://cdn.jwplayer.com/libraries/IDzF9Zmk.js"></script>
   <style>
     /* বেস লেআউট */
@@ -34,12 +34,6 @@
     .jw-quality-item.active::before { content:'✓'; position:absolute; left:15px; color:white; font-size: 16px; }
     
     #quality-loading { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.8); color:white; padding:10px 20px; border-radius:30px; font-size:14px; z-index:99999; display:none; font-family:Arial; border:1px solid rgba(255,255,255,0.2); }
-
-    /* কন্ট্রোল বার মডিফিকেশন */
-    .jw-icon-settings, .jw-settings-content [aria-label="Quality"], 
-    .jw-icon-audio-tracks, .jw-icon-cc { display: none !important; } /* অডিও ও সেটিংস হাইড */
-    
-    .jw-controlbar .jw-slider-time { display: flex !important; } /* সিকবার শো করার জন্য */
   </style>
 </head>
 <body>
@@ -47,6 +41,7 @@
   <div id="loading-overlay"><div class="spinner"></div><div id="loading-text">Loading Stream...</div></div>
   <div id="quality-loading">Switching quality...</div>
 
+  <!-- প্লেয়ার সেকশন -->
   <div id="player-container">
     <div id="player"></div>
   </div>
@@ -54,6 +49,9 @@
   <div id="quality-selector" class="jw-quality-selector"></div>
 
   <script>
+    const proxyBaseUrl = 'https://allinonereborn.online/fcww/live222.php?url=';
+    
+    // URL থেকে ?play= এর ভ্যালু নেওয়া
     const urlParams = new URLSearchParams(window.location.search);
     const streamUrl = urlParams.get('play');
 
@@ -67,6 +65,7 @@
       overlay.style.display = s ? 'flex' : 'none';
       if(s) {
         document.getElementById('loading-text').innerText = t;
+        // এরর মেসেজ হলে স্পিনার হাইড করে দেওয়া
         if(t.includes("Error") || t.includes("provide")) {
           spinner.style.display = 'none';
         } else {
@@ -75,6 +74,7 @@
       }
     }
 
+    // লিংক থেকে অটোমেটিক কোয়ালিটি লিস্ট জেনারেট করা
     function generateStreamsFromUrl(url) {
       const qMap = {'1080p':6, '720p':5, '540p':4, '480p':3, '360p':2, '240p':1};
       const qualities = ['1080p', '720p', '540p', '480p', '360p', '240p'];
@@ -82,7 +82,7 @@
       
       const match = url.match(/(1080p|720p|540p|480p|360p|240p|master)\.m3u8/i);
       if(match) {
-        let replaceTarget = match[0];
+        let replaceTarget = match[1] + '.m3u8';
         qualities.forEach(q => {
           let newUrl = url.replace(replaceTarget, q + '.m3u8');
           streams.push({url: newUrl, quality: q, order: qMap[q]});
@@ -116,16 +116,17 @@
       document.getElementById('quality-loading').style.display = 'block';
       const pos = player.getPosition();
       
-      player.load([{ file: url, label: label, type: 'hls' }]);
+      player.load([{ file: proxyBaseUrl + encodeURIComponent(url), label: label, type: 'hls' }]);
       player.once('play', () => {
         document.getElementById('quality-loading').style.display = 'none';
         if(pos > 0) player.seek(pos);
       });
     }
 
+    // পেজ লোড হওয়ার সাথে সাথে এই ফাংশনটি রান করবে
     function initPlayer() {
       if(!streamUrl) {
-        return showLoading(true, "No stream URL provided.\nUse ?play=YOUR_M3U8_LINK");
+        return showLoading(true, "No stream URL provided.\nUse ?play=YOUR_M3U8_LINK in the URL.");
       }
 
       showLoading(true, "Loading Player...");
@@ -136,8 +137,9 @@
         currentQuality = def.quality;
         buildMenu();
 
+        // JW Player Setup
         player = jwplayer('player').setup({
-          file: def.url,
+          file: proxyBaseUrl + encodeURIComponent(def.url),
           type: 'hls', 
           autostart: true,
           mute: false,
@@ -146,48 +148,32 @@
           stretching: 'uniform',
           controls: true,
           primary: 'html5',
-          hlshtml: true,
-          dvrSeekLimit: 3600 // ১ ঘণ্টা পর্যন্ত পিছনে টানার সুযোগ দিবে যদি স্ট্রিমে থাকে
+          hlshtml: true
         });
 
         player.on('ready', () => {
           showLoading(false);
+          
+          // Fullscreen Bug Fix (প্লেয়ার রেডি হওয়ার পর ইনজেক্ট করা হচ্ছে)
           const playerDiv = document.getElementById('player');
           const qualityMenu = document.getElementById('quality-selector');
           if (playerDiv && qualityMenu) {
             playerDiv.appendChild(qualityMenu);
           }
           
-          // ১০ সেকেন্ড ব্যাক বাটন
-          const backSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMi41IDNDMTcuMTUgMyAyMS4wOCA2LjAzIDIyLjQ3IDEwLjIyTDIwLjEgMTFDMTkuMDUgNy42OSAxNi4wMyA1LjI1IDEyLjUgNS4yNUM5LjA3IDUuMjUgNi4xMyA3LjUgNS4wNSAxMC42MUw3IDEySDJWN0wzLjkyIDguNTlDNS4zOSA1LjI0IDguNjggMyAxMi41IDNNMTEuNSAxMEgxMi41VjE3SDExLjVWMTBNOC4yIDEwLjFDOC43NSAxMC4xIDkuMiAxMC41NSA5LjIgMTEuMVYxNS45QzkuMiAxNi40NSA4Ljc1IDE2LjkgOC4yIDE2LjlINS44QzUuMjUgMTYuOSA0LjggMTYuNDUgNC44IDE1LjlWMTEuMUM0LjggMTAuNTUgNS4yNSAxMC4xIDUuOCAxMC4xSDguMk04IDE1LjdWMTEuM0g2VjE1LjdIOFoiLz48L3N2Zz4=";
-          
-          player.addButton(backSvg, "Back 10s", () => {
-              let target = player.getPosition() - 10;
-              player.seek(target < 0 ? 0 : target);
-          }, "back-btn");
-
-          // কোয়ালিটি সেটিংস বাটন
           const gearSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xOS40IDEzYy4xLS42LjEtMS4zIDAtMS45bDIuMS0xLjZjLjItLjIuMy0uNS4xLS43bC0yLTMuNWMtLjItLjMtLjUtLjQtLjgtLjNsLTIuNSAxYy0uNS0uNC0xLjEtLjctMS43LTFsLS40LTIuNmMwLS4zLS4zLS41LS42LS41aC00Yy0uMyAwLS42LjItLjYuNWwtLjQgMi42Yy0uNi4zLTEuMi42LTEuNyAxbC0yLjUtMWMtLjMtLjEtLjYgMC0uOC4zbC0yIDMuNWMtLjEuMi0uMS41LjEuN2wyLjEgMS42Yy0uMS42LS4xIDEuMyAwIDEuOWwtMi4xIDEuNmMtLjIuMi0uMy41LS4xLjdsMiAzLjVjLjIuMy41LjQuOC4zbDIuNS0xYzEuNS40IDEuMS43IDEuNyAxbC40IDIuNmMwIC4zLjMuNS42LjVoNGMuMyAwIC42LS4yLjYtLjVsLjQtMi42Yy42LS4zIDEuMi0uNiAxLjctMWwyLjUgMWMuMy4xLjYgMCAuOC0uM2wyLTMuNWMuMS0uMi4xLS41LS4xLS43bC0yLjEtMS42em0tNy40IDIuNWMtMS45IDAtMy41LTEuNi0zLjUtMy41czEuNi0zLjUgMy41LTMuNSAzLjUgMS42IDMuNSAzLjUtMS42IDMuNS0zLjUgMy41eiIvPjwvc3ZnPg==";
           
-          player.addButton(gearSvg, "Quality", () => { 
-            document.getElementById('quality-selector').classList.toggle('show'); 
-          }, "quality-settings-btn");
+          try {
+            player.addButton(
+              gearSvg,
+              "Quality",
+              () => { document.getElementById('quality-selector').classList.toggle('show'); },
+              "quality-settings-btn"
+            );
+          } catch(e) { console.log("Button API failed"); }
         });
 
-        player.on('time', (data) => {
-          const liveBtn = document.querySelector('.jw-display-icon-live');
-          if (liveBtn) {
-            if (data.duration - data.position > 15) {
-              liveBtn.style.color = "#ccc"; 
-              liveBtn.style.cursor = "pointer";
-              liveBtn.onclick = () => player.seek(player.getDuration());
-            } else {
-              liveBtn.style.color = "#ff0000"; 
-              liveBtn.onclick = null;
-            }
-          }
-        });
-
+        // যদি কোনো কারণে লিংক প্লে না হয়
         player.on('error', () => {
           showLoading(true, "Video Error! Check your link.");
         });
@@ -197,6 +183,7 @@
       }
     }
 
+    // স্ক্রিনের অন্য কোথাও ক্লিক করলে মেনু হাইড হবে
     document.addEventListener('click', (e) => {
       const sel = document.getElementById('quality-selector');
       if(sel && sel.classList.contains('show') && !e.target.closest('.jw-button-color') && !sel.contains(e.target)) {
@@ -204,6 +191,7 @@
       }
     });
 
+    // স্ক্রিপ্ট শুরু করা হচ্ছে
     initPlayer();
   </script>
 </body>

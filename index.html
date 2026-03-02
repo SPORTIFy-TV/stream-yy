@@ -3,21 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>JW Player - Direct Stream</title>
-  <!-- নতুন লাইব্রেরি সোর্স -->
+  <title>JW Player - Direct Stream Fix</title>
+  <!-- JW Player Library -->
   <script src="https://ssl.p.jwpcdn.com/player/v/8.21.0/jwplayer.js"></script>
   <style>
-    /* বেস লেআউট - আগের মতোই */
     html, body { margin: 0; height: 100%; background: black; overflow: hidden; }
     #player-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
     #player { width: 100%; height: 100%; }
 
-    /* লোডিং ডিজাইন */
     #loading-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:999999; color:white; font-family:Arial; text-align:center; padding: 20px;}
     .spinner { width:50px; height:50px; border:5px solid rgba(255,255,255,0.1); border-top-color:#00aaff; border-radius:50%; animation:spin 1s linear infinite; margin-bottom:15px; }
     @keyframes spin { to { transform: rotate(360deg); } }
     
-    /* কোয়ালিটি মেনু ডিজাইন */
     .jw-quality-selector { 
       position:absolute; bottom:60px; right:20px; background:rgba(20, 20, 20, 0.95); 
       border-radius:8px; z-index:99999999; display:none; font-family:Arial, sans-serif; 
@@ -49,10 +46,16 @@
   <div id="quality-selector" class="jw-quality-selector"></div>
 
   <script>
-    // সরাসরি লিঙ্ক ব্যবহারের জন্য প্রক্সি ইউআরএল সরিয়ে ফেলা হয়েছে
-    const urlParams = new URLSearchParams(window.location.search);
-    const streamUrl = urlParams.get('play');
+    // গুরুত্বপূর্ণ: URL থেকে পুরো লিঙ্কটি পাওয়ার জন্য উন্নত লজিক
+    function getStreamUrl() {
+      const fullUrl = window.location.href;
+      if (fullUrl.includes('play=')) {
+        return fullUrl.split('play=')[1]; // এটি &txTime সহ পুরো লিঙ্কটি নেবে
+      }
+      return null;
+    }
 
+    const streamUrl = getStreamUrl();
     let playerInstance = null;
     let currentQualityLabel = '';
     let qualityList = [];
@@ -63,7 +66,6 @@
       document.getElementById('loading-text').innerText = message;
     }
 
-    // ভিডিও লিঙ্ক থেকে অটোমেটিক কোয়ালিটি ভার্সন তৈরি করা
     function parseQualities(url) {
       const levels = [
         { name: '1080p', rank: 6 }, { name: '720p', rank: 5 },
@@ -72,15 +74,18 @@
       ];
       
       let results = [];
-      const match = url.match(/(1080p|720p|540p|480p|360p|240p|master)\.m3u8/i);
+      // আপনার লিঙ্কের ফরম্যাট অনুযায়ী (যেমন _lhd বা 1080p) চেক করা
+      const match = url.match(/(1080p|720p|540p|480p|360p|240p|_lhd|_sd|_hd)\.m3u8/i);
 
-      if(match) {
+      if(match && !url.includes('txSecret')) { 
+        // যদি টোকেন থাকে, তবে অটো রিপ্লেস করলে লিঙ্ক কাজ নাও করতে পারে, তাই টোকেন থাকলে শুধু ডিফল্ট রাখবে
         let basePart = match[1] + '.m3u8';
         levels.forEach(l => {
           results.push({ url: url.replace(basePart, l.name + '.m3u8'), label: l.name, rank: l.rank });
         });
       } else {
-        results.push({ url: url, label: 'Default', rank: 1 });
+        // আপনার বর্তমান লিঙ্কের জন্য এটিই কাজ করবে
+        results.push({ url: url, label: 'Live HD', rank: 1 });
       }
       return results.sort((a,b) => b.rank - a.rank);
     }
@@ -103,18 +108,11 @@
 
     function updateStream(newUrl, label) {
       if(currentQualityLabel === label) return;
-      
       currentQualityLabel = label;
       renderQualityMenu();
       document.getElementById('quality-loading').style.display = 'block';
-      
       const currentTime = playerInstance.getPosition();
-      
-      playerInstance.load([{
-        file: newUrl,
-        type: 'hls'
-      }]);
-
+      playerInstance.load([{ file: newUrl, type: 'hls' }]);
       playerInstance.once('play', () => {
         document.getElementById('quality-loading').style.display = 'none';
         if(currentTime > 0) playerInstance.seek(currentTime);
@@ -126,7 +124,7 @@
         return showOverlay(true, "Please provide a ?play= URL");
       }
 
-      showOverlay(true, "Fetching Stream...");
+      showOverlay(true, "Connecting to Live Stream...");
 
       try {
         qualityList = parseQualities(streamUrl);
@@ -135,37 +133,28 @@
         renderQualityMenu();
 
         playerInstance = jwplayer('player').setup({
-          file: initial.url,
+          file: decodeURIComponent(initial.url), // লিঙ্কটি ডিকোড করা হয়েছে
           type: 'hls',
           autostart: true,
           width: '100%',
           height: '100%',
           stretching: 'uniform',
           controls: true,
+          androidhls: true,
           hlshtml: true
         });
 
         playerInstance.on('ready', () => {
           showOverlay(false);
-          
-          // গিয়ার আইকন যোগ করা (Settings)
           const gearIcon = 'data:image/svg+xml;base64,PHN2ZyBmaWxsPSIjRkZGRkZGIiBoZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTkuNDMgMTIuOThjLjA0LS4zMi4wNy0uNjQuMDctLjk4cy0uMDMtLjY2LS4wNy0uOThsMi4xMS0xLjY1Yy4xOS0uMTUuMjQtLjQyLjEyLS42NGwtMi0zLjQ2Yy0uMTItLjIyLS4zOS0uMy0uNjEtLjIybC0yLjQ5IDFjLS41Mi0uNC0xLjA4LS43My0xLjY5LS45OGwtLjM4LTIuNjVDMTQuNDYgMi4xOCAxNC4yNSAyIDE0IDJoLTRjLS4yNSAwLS40Ni4xOC0uNDkuNDJsLS4zOCAyLjY1Yy0uNjEuMjUtMS4xNy41OS0xLjY5Ljk4bC0yLjQ5LTFjLS4yMy0uMDktLjQ5IDAtLjYxLjIybC0yIDMuNDZjLS4xMi4yMi0uMDcuNDkuMTIuNjRsMi4xMSAxLjY1Yy0uMDQuMzItLjA3LjY1LS4wNy45OHMuMDMuNjYuMDcgLjk4bC0yLjExIDEuNjVjLS4xOS4xNS0uMjQuNDItLjEyLjY0bDIgMy40NmMuMTIuMjIuMzkuMy42MS4yMmwyLjQ5LTFjLjUyLjQgMS4wOC43MyAxLjY5Ljk4bC4zOCAyLjY1Yy4wMy4yNC4yNC40Mi40OS40Mmg0Yy4yNSAwIC40Ni0uMTguNDktLjQybC4zOC0yLjY1Yy42MS0uMjUgMS4xNy0uNTkgMS42OS0uOThsMi40OSAxYy4yMy4wOS40OSAwIC42MS0uMjJsMi0zLjQ2Yy4xMi0uMjIuMDctLjQ5LS4xMi0uNjRsLTIuMTEtMS42NXpNMTIgMTUuNWMtMS45MyAwLTMuNS0xLjU3LTMuNS0zLjVzMS41Ny0zLjUgMy41LTMuNSAzLjUgMS41NyAzLjUgMy41LTEuNTcgMy41LTMuNSAzLjV6Ii8+PC9zdmc+';
-
-          playerInstance.addButton(
-            gearIcon,
-            "Quality",
-            () => { document.getElementById('quality-selector').classList.toggle('show'); },
-            "quality-btn"
-          );
-
-          // মেনু প্লেয়ারের ভেতরে ইনজেক্ট করা (Fullscreen এর জন্য জরুরি)
+          playerInstance.addButton(gearIcon, "Quality", () => { document.getElementById('quality-selector').classList.toggle('show'); }, "quality-btn");
           const playerDiv = document.querySelector('.jwplayer');
           const qMenu = document.getElementById('quality-selector');
           if(playerDiv) playerDiv.appendChild(qMenu);
         });
 
         playerInstance.on('error', (e) => {
-          showOverlay(true, "Playback Error: Check your link.");
+          showOverlay(true, "Stream Offline or CORS Error.");
           console.error(e);
         });
 
@@ -174,10 +163,9 @@
       }
     }
 
-    // স্ক্রিনের বাইরে ক্লিক করলে মেনু বন্ধ হবে
     document.addEventListener('click', (e) => {
       const menu = document.getElementById('quality-selector');
-      if(!e.target.closest('.jw-button-color') && !menu.contains(e.target)) {
+      if(menu && !e.target.closest('.jw-button-color') && !menu.contains(e.target)) {
         menu.classList.remove('show');
       }
     });

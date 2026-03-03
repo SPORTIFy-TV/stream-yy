@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Live Sports Player - Auto URL</title>
+  <title>Live Sports Player - Direct URL</title>
   <script src="https://cdn.jwplayer.com/libraries/IDzF9Zmk.js"></script>
   <style>
     /* বেস লেআউট */
@@ -49,8 +49,6 @@
   <div id="quality-selector" class="jw-quality-selector"></div>
 
   <script>
-    const proxyBaseUrl = '';
-    
     // URL থেকে ?play= এর ভ্যালু নেওয়া
     const urlParams = new URLSearchParams(window.location.search);
     const streamUrl = urlParams.get('play');
@@ -65,7 +63,6 @@
       overlay.style.display = s ? 'flex' : 'none';
       if(s) {
         document.getElementById('loading-text').innerText = t;
-        // এরর মেসেজ হলে স্পিনার হাইড করে দেওয়া
         if(t.includes("Error") || t.includes("provide")) {
           spinner.style.display = 'none';
         } else {
@@ -116,7 +113,8 @@
       document.getElementById('quality-loading').style.display = 'block';
       const pos = player.getPosition();
       
-      player.load([{ file: proxyBaseUrl + encodeURIComponent(url), label: label, type: 'hls' }]);
+      // প্রোডক্ট ইউআরএল সরাসরি ব্যবহার করা হচ্ছে (প্রক্সি ছাড়া)
+      player.load([{ file: url, label: label, type: 'hls' }]);
       player.once('play', () => {
         document.getElementById('quality-loading').style.display = 'none';
         if(pos > 0) player.seek(pos);
@@ -137,9 +135,9 @@
         currentQuality = def.quality;
         buildMenu();
 
-        // JW Player Setup
+        // JW Player Setup (সরাসরি ইউআরএল ব্যবহার)
         player = jwplayer('player').setup({
-          file: proxyBaseUrl + encodeURIComponent(def.url),
+          file: def.url,
           type: 'hls', 
           autostart: true,
           mute: false,
@@ -154,14 +152,14 @@
         player.on('ready', () => {
           showLoading(false);
           
-          // Fullscreen Bug Fix (প্লেয়ার রেডি হওয়ার পর ইনজেক্ট করা হচ্ছে)
+          // Fullscreen Bug Fix
           const playerDiv = document.getElementById('player');
           const qualityMenu = document.getElementById('quality-selector');
           if (playerDiv && qualityMenu) {
             playerDiv.appendChild(qualityMenu);
           }
           
-          const gearSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xOS40IDEzYy4xLS42LjEtMS4zIDAtMS45bDIuMS0xLjZjLjItLjIuMy0uNS4xLS43bC0yLTMuNWMtLjItLjMtLjUtLjQtLjgtLjNsLTIuNSAxYy0uNS0uNC0xLjEtLjctMS43LTFsLS40LTIuNmMwLS4zLS4zLS41LS42LS41aC00Yy0uMyAwLS42LjItLjYuNWwtLjQgMi42Yy0uNi4zLTEuMi42LTEuNyAxbC0yLjUtMWMtLjMtLjEtLjYgMC0uOC4zbC0yIDMuNWMtLjEuMi0uMS41LjEuN2wyLjEgMS42Yy0uMS42LS4xIDEuMyAwIDEuOWwtMi4xIDEuNmMtLjIuMi0uMy41LS4xLjdsMiAzLjVjLjIuMy41LjQuOC4zbDIuNS0xYzEuNS40IDEuMS43IDEuNyAxbC40IDIuNmMwIC4zLjMuNS42LjVoNGMuMyAwIC42LS4yLjYtLjVsLjQtMi42Yy42LS4zIDEuMi0uNiAxLjctMWwyLjUgMWMuMy4xLjYgMCAuOC0uM2wyLTMuNWMuMS0uMi4xLS41LS4xLS43bC0yLjEtMS42em0tNy40IDIuNWMtMS45IDAtMy41LTEuNi0zLjUtMy41czEuNi0zLjUgMy41LTMuNSAzLjUgMS42IDMuNSAzLjUtMS42IDMuNS0zLjUgMy41eiIvPjwvc3ZnPg==";
+          const gearSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xOS40IDEzYy4xLS42LjEtMS4zIDAtMS45bDIuMS0xLjZjLjOzLS4yLjMtLjUuMS0uNy0yLTMuNWMtLjItLjMtLjUtLjQtLjgtLjNsLTIuNSAxYy0uNS0uNC0xLjEtLjctMS43LTFsLS40LTIuNmMwLS4zLS4zLS41LS42LS41aC00Yy0uMyAwLS42LjItLjYuNWwtLjQgMi42Yy0uNi4zLTEuMi42LTEuNyAxbC0yLjUtMWMtLjMtLjEtLjYgMC0uOC4zbC0yIDMuNWMtLjEuMi0uMS41LjEuN2wyLjEgMS42Yy0uMS42LS4xIDEuMyAwIDEuOWwtMi4xIDEuNmMtLjIuMi0uMy41LS4xLjdsMiAzLjVjLjIuMy41LjQuOC4zbDIuNS0xYzEuNS40IDEuMS43IDEuNyAxbC40IDIuNmMwIC4zLjMuNS42LjVoNGMuMyAwIC42LS4yLjYtLjVsLjQtMi42Yy42LS4zIDEuMi0uNiAxLjctMWwyLjUgMWMuMy4xLjYgMCAuOC0uM2wyLTMuNWMuMS0uMi4xLS41LS4xLS43bC0yLjEtMS42em0tNy40IDIuNWMtMS45IDAtMy41LTEuNi0zLjUtMy41czEuNi0zLjUgMy41LTMuNSAzLjUgMS42IDMuNSAzLjUtMS42IDMuNS0zLjUgMy41eiIvPjwvc3ZnPg==";
           
           try {
             player.addButton(
@@ -173,7 +171,6 @@
           } catch(e) { console.log("Button API failed"); }
         });
 
-        // যদি কোনো কারণে লিংক প্লে না হয়
         player.on('error', () => {
           showLoading(true, "Video Error! Check your link.");
         });
@@ -183,7 +180,6 @@
       }
     }
 
-    // স্ক্রিনের অন্য কোথাও ক্লিক করলে মেনু হাইড হবে
     document.addEventListener('click', (e) => {
       const sel = document.getElementById('quality-selector');
       if(sel && sel.classList.contains('show') && !e.target.closest('.jw-button-color') && !sel.contains(e.target)) {
@@ -191,7 +187,6 @@
       }
     });
 
-    // স্ক্রিপ্ট শুরু করা হচ্ছে
     initPlayer();
   </script>
 </body>
